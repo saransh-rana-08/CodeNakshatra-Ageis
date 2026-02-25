@@ -1,6 +1,7 @@
-import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import { Config } from "@/constants/Config";
 import { Link, useRouter } from "expo-router";
+import React, { useState } from "react";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 
 export default function Register() {
   const router = useRouter();
@@ -20,7 +21,7 @@ export default function Register() {
     setLoading(true);
 
     try {
-      const response = await fetch("https://safety-login.onrender.com/auth/register", {
+      const response = await fetch(Config.endpoints.AUTH_REGISTER, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({

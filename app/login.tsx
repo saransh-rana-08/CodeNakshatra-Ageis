@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, StyleSheet } from "react-native";
+import { Config } from "@/constants/Config";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { Link, useRouter } from "expo-router";
-
+import React, { useEffect, useState } from "react";
+import { StyleSheet, Text, TextInput, TouchableOpacity, View } from "react-native";
 export default function Login() {
   const router = useRouter();
 
@@ -18,7 +18,7 @@ export default function Login() {
     const token = await AsyncStorage.getItem("token");
     if (!token) return;
 
-    const meRes = await fetch("https://safety-login.onrender.com/auth/me", {
+    const meRes = await fetch(Config.endpoints.AUTH_ME, {
       headers: { Authorization: `Bearer ${token}` },
     });
 
@@ -36,7 +36,7 @@ export default function Login() {
     setLoading(true); // 🔥 FIX
 
     try {
-      const response = await fetch("https://safety-login.onrender.com/auth/login", {
+      const response = await fetch(Config.endpoints.AUTH_LOGIN, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ email, password }),
@@ -54,7 +54,7 @@ export default function Login() {
       await AsyncStorage.setItem("token", token);
 
       // Validate using /me
-      const meRes = await fetch("https://safety-login.onrender.com/auth/me", {
+      const meRes = await fetch(Config.endpoints.AUTH_ME, {
         headers: { Authorization: `Bearer ${token}` },
       });
 
