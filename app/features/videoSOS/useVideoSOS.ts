@@ -45,13 +45,20 @@ export const useVideoSOS = (options?: { onRecordingFinished?: (uri: string) => v
                             await MediaLibrary.saveToLibraryAsync(data.uri);
                             console.log("[VideoSOS] Video saved to gallery.");
 
-                            // 🟢 Callback to parent
+                            // Upload to Backend
+                            console.log("[VideoSOS] Uploading video to server...");
+                            // We need to import SOSService dynamically or at the top
+                            const { SOSService } = require('../../../services/sosService');
+                            const uploadedUrl = await SOSService.uploadMedia(data.uri, 'video');
+                            console.log("[VideoSOS] Upload success:", uploadedUrl);
+
+                            // 🟢 Callback to parent with the ONLINE URL, not the local URI
                             if (options?.onRecordingFinished) {
-                                options.onRecordingFinished(data.uri);
+                                options.onRecordingFinished(uploadedUrl);
                             }
 
                         } catch (e) {
-                            console.error("[VideoSOS] Failed to save video:", e);
+                            console.error("[VideoSOS] Failed to save/upload video:", e);
                         }
                     }
                 }).catch(e => {
