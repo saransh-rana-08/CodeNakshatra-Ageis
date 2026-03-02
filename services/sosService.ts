@@ -1,4 +1,5 @@
-import axios from 'axios';
+
+import { CloudinaryConfig } from '../constants/CloudinaryConfig';
 import { Config } from '../constants/Config';
 import apiClient from './apiClient';
 
@@ -41,31 +42,45 @@ export const SOSService = {
     },
 
     async uploadMedia(uri: string, type: 'audio' | 'video'): Promise<string> {
-        const formData = new FormData();
+        return this.uploadToCloudinaryWithRetries(uri, type, 3);
+    },
 
-        if (type === 'audio') {
-            // @ts-ignore
-            formData.append("file", {
+    async uploadToCloudinaryWithRetries(uri: string, type: 'audio' | 'video', retriesLeft: number): Promise<string> {
+        try {
+            const url = `https://api.cloudinary.com/v1_1/${CloudinaryConfig.cloudName}/auto/upload`;
+
+            const formData = new FormData();
+
+            formData.append('file', {
                 uri,
-                name: `sos_audio_${Date.now()}.m4a`,
-                type: "audio/m4a",
+                type: type === 'audio' ? 'audio/m4a' : 'video/mp4',
+                name: type === 'audio' ? 'sos-audio.m4a' : 'sos-video.mp4',
+            } as any);
+
+            formData.append('upload_preset', CloudinaryConfig.uploadPreset);
+            formData.append('folder', 'sos-media');
+
+            const response = await fetch(url, {
+                method: 'POST',
+                body: formData,
             });
-        } else {
-            // @ts-ignore
-            formData.append("file", {
-                uri,
-                name: `sos_video_${Date.now()}.mp4`,
-                type: "video/mp4",
-            });
+
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`Cloudinary upload failed: ${errorText}`);
+            }
+
+            const data = await response.json();
+            return data.secure_url;
+
+        } catch (error) {
+            console.error(`Media upload failed. Retries left: ${retriesLeft - 1}`, error);
+            if (retriesLeft > 1) {
+                // Wait 2 seconds before retrying
+                await new Promise(resolve => setTimeout(resolve, 2000));
+                return this.uploadToCloudinaryWithRetries(uri, type, retriesLeft - 1);
+            }
+            throw new Error(`Media upload failed after retries: ${error}`);
         }
-
-        // We use raw axios here because headers: multipart/form-data doesn't play 
-        // super nicely with global configs sometimes in React Native, 
-        // though apiClient could be used if overridden. We keep it as axios for safety.
-        const response = await axios.post(`${Config.API_BASE_URL}/api/media/upload`, formData, {
-            headers: { "Content-Type": "multipart/form-data" },
-        });
-
-        return response.data.url;
     }
 };

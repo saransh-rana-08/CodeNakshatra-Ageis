@@ -1,4 +1,4 @@
-const FALLBACK_URL = "http://192.168.0.110:8080";
+const FALLBACK_URL = "http://192.168.0.100:8080";
 const TWILIO_SERVICE_URL = "https://twilio-sms-service.onrender.com";
 const AUTH_SERVICE_URL = "https://safety-login.onrender.com";
 
