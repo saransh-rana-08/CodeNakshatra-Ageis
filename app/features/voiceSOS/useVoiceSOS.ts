@@ -8,20 +8,20 @@ const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || ""; // Load from en
 
 // Trigger Phrases (English & Hindi)
 const TRIGGER_PHRASES = [
-    "help", "help me", "save me", "stop", "no", "leave me",
-    "don't touch me", "dont touch me", "don't hurt me", "dont hurt me",
-    "let me go", "please stop", "somebody help", "call the police",
-    "emergency", "i need help",
-    "bachaao", "bachao", "meri madad karo", "mujhe bachaao", "mujhe bachao",
-    "chhod do mujhe", "mat maaro", "mat chhoo", "jaane do",
-    "police ko bulao", "madad chahiye", "ruk jaao", "ruk jao",
-    "nahi nahi", "mere paas mat aao"
+    "help", "help me", "save me", "stop", "no", "leave me"
+    // "don't touch me", "dont touch me", "don't hurt me", "dont hurt me",
+    // "let me go", "please stop", "somebody help", "call the police",
+    // "emergency", "i need help",
+    // "bachaao", "bachao", "meri madad karo", "mujhe bachaao", "mujhe bachao",
+    // "chhod do mujhe", "mat maaro", "mat chhoo", "jaane do",
+    // "police ko bulao", "madad chahiye", "ruk jaao", "ruk jao",
+    // "nahi nahi", "mere paas mat aao"
 ];
 
 const SAFE_PHRASES = [
-    "i am safe", "im safe", "safe",
-    "false alarm", "cancel", "stop sos", "don't send", "dont send",
-    "main theek hoon", "galti se hua", "ruk jao", "sab theek hai"
+    "i am safe", "im safe", "safe"
+    // "false alarm", "cancel", "stop sos", "don't send", "dont send",
+    // "main theek hoon", "galti se hua", "ruk jao", "sab theek hai"
 ];
 
 interface VoiceSOSOptions {

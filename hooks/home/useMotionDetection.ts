@@ -1,7 +1,7 @@
 import { Accelerometer } from 'expo-sensors';
 import { useEffect, useRef, useState } from 'react';
 
-const THRESHOLD = 2.3; // Default threshold from index.tsx
+const THRESHOLD = 5.0; // Default threshold from index.tsx
 
 interface UseMotionDetectionProps {
     onTrigger: () => void;

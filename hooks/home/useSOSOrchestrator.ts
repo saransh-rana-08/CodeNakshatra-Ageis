@@ -11,6 +11,7 @@ import { SMSService } from '../../services/smsService';
 import { SOSService } from '../../services/sosService';
 import { useAudioRecording } from './useAudioRecording';
 import { useLocationTracker } from './useLocationTracker';
+import { UseSOSRestrictionReturn } from './useSOSRestriction';
 
 interface UseSOSOrchestratorProps {
     contacts: Contact[];
@@ -19,6 +20,8 @@ interface UseSOSOrchestratorProps {
     startVideoRecording: () => void;
     stopVideoRecording: () => void;
     stopListening: () => void;
+    /** Pass the useSOSRestriction hook return value to gate automated triggers. */
+    restriction: UseSOSRestrictionReturn;
 }
 
 export const useSOSOrchestrator = ({
@@ -28,6 +31,7 @@ export const useSOSOrchestrator = ({
     startVideoRecording,
     stopVideoRecording,
     stopListening,
+    restriction,
 }: UseSOSOrchestratorProps) => {
 
     const [cooldown, setCooldown] = useState(false);
@@ -303,11 +307,22 @@ export const useSOSOrchestrator = ({
 
         setPreSosActive(false);
         stopListening();
+
+        // ── Record automated trigger for cooldown tracking ────────────────────
+        restriction.recordSOSTrigger();
+
         triggerAutoSOS();
-    }, [stopListening, triggerAutoSOS]);
+    }, [stopListening, triggerAutoSOS, restriction]);
 
     const startAutomatedSequence = useCallback(async () => {
         if (preSosActive || tracking) return;
+
+        // ── Safety Restriction Gate (automated triggers only) ──────────────────
+        const { allowed, reason } = restriction.isSOSAllowed();
+        if (!allowed) {
+            console.log(`🔒 [SOSRestriction] Automated trigger blocked — reason: ${reason}`);
+            return;
+        }
 
         console.log("⏳ Starting Automated SOS Sequence...");
         setPreSosActive(true);
@@ -357,7 +372,7 @@ export const useSOSOrchestrator = ({
                 finishAutomatedSequence();
             }
         }, 1000) as unknown as NodeJS.Timeout;
-    }, [preSosActive, tracking, customAlarmUri, finishAutomatedSequence]);
+    }, [preSosActive, tracking, customAlarmUri, finishAutomatedSequence, restriction]);
 
     const cancelAutomatedSequence = useCallback(async () => {
         console.log("🛡 SOS Sequence Cancelled by User.");

@@ -1,4 +1,4 @@
-const FALLBACK_URL = "http://192.168.0.100:8080";
+const FALLBACK_URL = "http://10.10.183.29:8080";
 const TWILIO_SERVICE_URL = "https://twilio-sms-service.onrender.com";
 const AUTH_SERVICE_URL = "https://safety-login.onrender.com";
 
@@ -21,7 +21,7 @@ export const Config = {
     SMS: {
         FALLBACK_NUMBER: "+917906272840",
         DEFAULT_MESSAGE: (name?: string) => `🚨 EMERGENCY! ${name ? name + ' needs' : 'I need'} help.`,
-        EVIDENCE_MESSAGE: (name?: string) => `🚨 EMERGENCY EVIDENCE${name ? ` for ${name}` : ''}:`,
+        EVIDENCE_MESSAGE: (name?: string) => `🚨 EMERGENCY EVIDENCE${name ? ` for ${name}` : ''}:\n`,
         MEDIA_UPLOAD_FAIL: "Media upload failed or timed out.",
     },
     TIMEOUTS: {

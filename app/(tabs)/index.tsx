@@ -11,6 +11,7 @@ import { useContacts } from "../../hooks/home/useContacts";
 import { useMotionDetection } from "../../hooks/home/useMotionDetection";
 import { useSafeWords } from "../../hooks/home/useSafeWords";
 import { useSOSOrchestrator } from "../../hooks/home/useSOSOrchestrator";
+import { useSOSRestriction } from "../../hooks/home/useSOSRestriction";
 import { useVideoSOS } from "../features/videoSOS/useVideoSOS";
 import useVoiceSOS from "../features/voiceSOS/useVoiceSOS";
 
@@ -18,6 +19,7 @@ import useVoiceSOS from "../features/voiceSOS/useVoiceSOS";
 import { ContactsCard } from "../../components/home/ContactsCard";
 import { MotionCard } from "../../components/home/MotionCard";
 import { PreSOSOverlay } from "../../components/home/PreSOSOverlay";
+import { SafetyControlPanel } from "../../components/home/SafetyControlPanel";
 import { SafeWordsModal } from "../../components/home/SafeWordsModal";
 import { SOSButton } from "../../components/home/SOSButton";
 import { StatusCard } from "../../components/home/StatusCard";
@@ -36,6 +38,9 @@ export default function HomeScreen() {
     isSafeWordModalVisible, setIsSafeWordModalVisible,
     addSafeWord, deleteSafeWord
   } = useSafeWords();
+
+  // Safety restriction system (must be instantiated before orchestrator)
+  const restriction = useSOSRestriction();
 
   // Create a ref to hold orchestrator functions without cyclic dependency
   const handleVideoUploadedRef = useRef<((url: string) => void) | null>(null);
@@ -77,7 +82,8 @@ export default function HomeScreen() {
     requestCameraPermission,
     startVideoRecording,
     stopVideoRecording,
-    stopListening
+    stopListening,
+    restriction,
   });
 
   // Update the ref so the camera hook always calls the latest orchestrator callback
@@ -166,6 +172,8 @@ export default function HomeScreen() {
           cooldown={motionCooldown || cooldown}
           tracking={tracking}
         />
+
+        <SafetyControlPanel restriction={restriction} isTracking={tracking} />
 
         <StatusCard lastSOS={lastSOS} />
 
