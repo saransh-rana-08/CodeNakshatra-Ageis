@@ -64,6 +64,7 @@ export const useAudioRecording = () => {
             if (uri) {
                 if (sosId) {
                     // Start Background Upload
+                    console.log("🎙 Uploading audio to Cloudinary...");
                     SOSService.uploadMedia(uri, 'audio')
                         .then((audioUrl) => {
                             console.log("✅ Audio uploaded:", audioUrl);

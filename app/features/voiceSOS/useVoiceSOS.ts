@@ -1,4 +1,5 @@
-import { Audio } from 'expo-av';
+import { Audio, InterruptionModeAndroid, InterruptionModeIOS } from 'expo-av';
+import * as Linking from 'expo-linking';
 import { useCallback, useRef, useState } from 'react';
 
 // Audio Recording Constants
@@ -9,19 +10,10 @@ const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || ""; // Load from en
 // Trigger Phrases (English & Hindi)
 const TRIGGER_PHRASES = [
     "help", "help me", "save me", "no", "leave me"
-    // "don't touch me", "dont touch me", "don't hurt me", "dont hurt me",
-    // "let me go", "please stop", "somebody help", "call the police",
-    // "emergency", "i need help",
-    // "bachaao", "bachao", "meri madad karo", "mujhe bachaao", "mujhe bachao",
-    // "chhod do mujhe", "mat maaro", "mat chhoo", "jaane do",
-    // "police ko bulao", "madad chahiye", "ruk jaao", "ruk jao",
-    // "nahi nahi", "mere paas mat aao"
 ];
 
 const SAFE_PHRASES = [
     "i am safe", "im safe", "safe"
-    // "false alarm", "cancel", "stop sos", "don't send", "dont send",
-    // "main theek hoon", "galti se hua", "ruk jao", "sab theek hai"
 ];
 
 interface VoiceSOSOptions {
@@ -38,21 +30,32 @@ interface VoiceSOSOptions {
 
 export default function useVoiceSOS(options: VoiceSOSOptions) {
     const { onKeywordDetected, onError } = options;
-    const [isListening, setIsListening] = useState(false);
+    const isListening = useRef(false);
     const [isProcessing, setIsProcessing] = useState(false);
 
     const recordingRef = useRef<Audio.Recording | null>(null);
     const isProcessingRef = useRef(false);
     const shouldStopRef = useRef(false);
-    const hasSpeechRef = useRef(false);
+    const chunkTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-    // 🔄 Keep track of latest callback to avoid stale closures
+    // 🔄 Keep track of latest callbacks/data to avoid stale closures
     const onKeywordDetectedRef = useRef(onKeywordDetected);
     onKeywordDetectedRef.current = onKeywordDetected;
-
-    // 🔄 Keep track of latest custom words
     const customSafeWordsRef = useRef(options.customSafeWords || []);
     customSafeWordsRef.current = options.customSafeWords || [];
+
+    // Helper: Safe Unload
+    const safeUnload = async (recording: Audio.Recording | null) => {
+        if (!recording) return;
+        try {
+            const status = await recording.getStatusAsync();
+            if (status.canRecord || status.isRecording) {
+                await recording.stopAndUnloadAsync();
+            }
+        } catch (e) {
+            console.log("[VoiceSOS] Safe unload handled error:", e);
+        }
+    };
 
     // 1. Send to Cloud (Groq Whisper)
     const sendAudioToCloud = async (uri: string) => {
@@ -70,15 +73,12 @@ export default function useVoiceSOS(options: VoiceSOSOptions) {
                 name: 'audio.m4a',
             });
             formData.append('model', 'whisper-large-v3');
-
-            // 🎯 OPTIMIZATION: Force English (Latin script) & Provide Context
-            // This helps with Hinglish (e.g. "Bachao") and reduces hallucinations.
             formData.append('language', 'en');
+            
             const customWordsStr = customSafeWordsRef.current.join(", ");
             const prompt = `Emergency phrases: Help, Bachao, Madad, Save me. Safe phrases: I am safe, Cancel, ${customWordsStr}. Transcribe in English or Hinglish.`;
             formData.append('prompt', prompt);
 
-            console.log('[VoiceSOS] Sending audio...');
             const response = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
                 method: 'POST',
                 headers: {
@@ -89,14 +89,12 @@ export default function useVoiceSOS(options: VoiceSOSOptions) {
             });
 
             const data = await response.json();
-            console.log('[VoiceSOS] Transcription:', data.text);
-
-            if (data.error) {
-                console.error('[VoiceSOS] OpenAI Error:', data.error.message);
-            }
-
             if (data.text) {
+                console.log('[VoiceSOS] Transcription:', data.text);
                 checkTriggerPhrases(data.text);
+            }
+            if (data.error) {
+                console.error('[VoiceSOS] Groq Error:', data.error.message);
             }
 
         } catch (error) {
@@ -104,207 +102,196 @@ export default function useVoiceSOS(options: VoiceSOSOptions) {
         }
     };
 
-    // ... (checkTriggerPhrases remains same) ...
     const checkTriggerPhrases = (text: string) => {
         if (!text) return;
         const lowerText = text.toLowerCase();
-
-        // 1. Check for Safe Phrases FIRST
-        // 1. Check for Safe Phrases FIRST
         const allSafePhrases = [...SAFE_PHRASES, ...customSafeWordsRef.current];
-
-        // console.log(`[VoiceSOS] Checking text: "${lowerText}" against safe words:`, allSafePhrases);
-
-        // Use logic that checks if the lowerText INCLUDES any phrase
         const safeDetected = allSafePhrases.find(phrase => lowerText.includes(phrase.toLowerCase()));
+        
         if (safeDetected) {
             console.log(`[VoiceSOS] 🛡 SAFE WORD DETECTED: "${safeDetected}"`);
-            onKeywordDetectedRef.current({
-                keyword: safeDetected,
-                type: 'safe',
-                confidence: 1.0,
-                timestamp: Date.now(),
-            });
-            return; // Exit if safe word found
+            onKeywordDetectedRef.current({ keyword: safeDetected, type: 'safe', confidence: 1.0, timestamp: Date.now() });
+            return;
         }
 
-        // 2. Check for Trigger Phrases
         const detected = TRIGGER_PHRASES.find(phrase => lowerText.includes(phrase));
-
         if (detected) {
             console.log(`[VoiceSOS] 🚨 TRIGGER DETECTED: "${detected}"`);
-            // Call the REF instead of the prop directly
-            onKeywordDetectedRef.current({
-                keyword: detected,
-                type: 'trigger',
-                confidence: 1.0,
-                timestamp: Date.now(),
-            });
+            onKeywordDetectedRef.current({ keyword: detected, type: 'trigger', confidence: 1.0, timestamp: Date.now() });
         }
     };
 
-    // 3. Stop and Process
+    // 3. Stop and Process Chunk
     const stopAndProcess = async (recording: Audio.Recording) => {
+        if (isProcessingRef.current) return;
+        
         try {
-            if (isProcessingRef.current) return;
             isProcessingRef.current = true;
             setIsProcessing(true);
 
-            // 🛑 VAD CHECK: Log but DO NOT BLOCK
-            if (!hasSpeechRef.current) {
-                // console.log('[VoiceSOS] ⚠️ Low volume detected, but sending anyway (Robust Mode).');
-            }
-
-            // console.log('[VoiceSOS] Stopping recording...');
-            await recording.stopAndUnloadAsync();
+            await safeUnload(recording);
             const uri = recording.getURI();
 
-            if (uri) {
-                // console.log('[VoiceSOS] Processing audio:', uri);
-                await sendAudioToCloud(uri);
-                // 🟢 Callback to parent for upload
-                if (options.onAudioRecorded) {
-                    options.onAudioRecorded(uri);
-                }
-            }
-
-            // Restart loop if not stopped
-            if (!shouldStopRef.current) {
-                isProcessingRef.current = false;
-                setIsProcessing(false);
-                startListening();
+            if (uri && !shouldStopRef.current) {
+                sendAudioToCloud(uri); // Fire and forget upload for this chunk
+                if (options.onAudioRecorded) options.onAudioRecorded(uri);
             }
 
         } catch (error) {
-            console.error('[VoiceSOS] Error processing:', error);
-            // Restart anyway
+            console.error('[VoiceSOS] Error in stopAndProcess:', error);
+        } finally {
+            isProcessingRef.current = false;
+            setIsProcessing(false);
+            
+            // Loop back if not stopped
             if (!shouldStopRef.current) {
-                isProcessingRef.current = false;
-                setIsProcessing(false);
-                startListening();
+                startListeningLoop();
+            } else {
+                isListening.current = false;
             }
         }
     };
 
-    // 4. Start Listening
-    const startListening = useCallback(async () => {
-        if (shouldStopRef.current) return;
+    // 4. Main Listening Loop
+    const startListeningLoop = useCallback(async () => {
+        if (shouldStopRef.current) {
+            isListening.current = false;
+            return;
+        }
+        
+        isListening.current = true;
 
         try {
-            // console.log('[VoiceSOS] Starting recording...');
-            await Audio.setAudioModeAsync({
-                allowsRecordingIOS: true,
-                playsInSilentModeIOS: true,
-                staysActiveInBackground: true,
-            });
+            // 1. Initial Permission Check (Only if not granted)
+            let { status } = await Audio.getPermissionsAsync();
+            if (status !== 'granted') {
+                const requested = await Audio.requestPermissionsAsync();
+                if (requested.status !== 'granted') {
+                    if (!requested.canAskAgain) Linking.openSettings();
+                    onError?.("Microphone permission required.");
+                    isListening.current = false;
+                    return;
+                }
+            }
 
-            const { recording } = await Audio.Recording.createAsync({
-                android: {
-                    extension: '.m4a',
-                    outputFormat: Audio.AndroidOutputFormat.MPEG_4,
-                    audioEncoder: Audio.AndroidAudioEncoder.AAC,
-                    sampleRate: SAMPLE_RATE,
-                    numberOfChannels: 1,
-                    bitRate: 128000,
-                    // @ts-ignore
-                    metering: true, // 👈 ENABLE METERING
-                },
-                ios: {
-                    extension: '.m4a',
-                    outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
-                    audioQuality: Audio.IOSAudioQuality.HIGH,
-                    sampleRate: SAMPLE_RATE,
-                    numberOfChannels: 1,
-                    bitRate: 128000,
-                    linearPCMBitDepth: 16,
-                    linearPCMIsBigEndian: false,
-                    linearPCMIsFloat: false,
-                    // @ts-ignore
-                    metering: true, // 👈 ENABLE METERING
-                },
-                web: {
-                    mimeType: 'audio/webm',
-                    bitsPerSecond: 128000,
-                },
-            });
+            // 2. Hardware initialization (Targeted try/catch)
+            let recording: Audio.Recording;
+            try {
+                const result = await Audio.Recording.createAsync({
+                    android: {
+                        extension: '.m4a',
+                        outputFormat: Audio.AndroidOutputFormat.MPEG_4,
+                        audioEncoder: Audio.AndroidAudioEncoder.AAC,
+                        sampleRate: SAMPLE_RATE,
+                        numberOfChannels: 1,
+                        bitRate: 128000,
+                        // @ts-ignore
+                        metering: true,
+                    },
+                    ios: {
+                        extension: '.m4a',
+                        outputFormat: Audio.IOSOutputFormat.MPEG4AAC,
+                        audioQuality: Audio.IOSAudioQuality.HIGH,
+                        sampleRate: SAMPLE_RATE,
+                        numberOfChannels: 1,
+                        bitRate: 128000,
+                        linearPCMBitDepth: 16,
+                        linearPCMIsBigEndian: false,
+                        linearPCMIsFloat: false,
+                        // @ts-ignore
+                        metering: true,
+                    },
+                    web: { mimeType: 'audio/webm', bitsPerSecond: 128000 },
+                });
+                recording = result.recording;
+            } catch (err) {
+                console.error("[VoiceSOS] Mic init error:", err);
+                onError?.("Microphone is currently unavailable.");
+                // Retry after a delay if not stopped
+                if (!shouldStopRef.current) {
+                    chunkTimeoutRef.current = setTimeout(startListeningLoop, 2000) as any;
+                } else {
+                    isListening.current = false;
+                }
+                return;
+            }
 
-            // 🔴 FIX: Check if stopped during initialization
             if (shouldStopRef.current) {
-                console.log('[VoiceSOS] Stopped during initialization, unloading...');
-                await recording.stopAndUnloadAsync();
+                await safeUnload(recording);
+                isListening.current = false;
                 return;
             }
 
             recordingRef.current = recording;
-            setIsListening(true);
 
-            // 🎤 VAD SETUP: Monitor volume
-            hasSpeechRef.current = false;
-            let maxVol = -160;
-            recording.setProgressUpdateInterval(200);
-            recording.setOnRecordingStatusUpdate((status) => {
-                if (status.metering !== undefined) {
-                    if (status.metering > maxVol) maxVol = status.metering;
-                    // Lower threshold to -60 (more sensitive)
-                    if (status.metering > -60) {
-                        hasSpeechRef.current = true;
-                    }
-                }
-            });
-
-            // Record for CHUNK_DURATION_MS then process
-            setTimeout(async () => {
-                // console.log(`[VoiceSOS] Max Volume: ${maxVol.toFixed(1)} dB`); // Debug log
-                if (shouldStopRef.current) {
-                    // Just stop if we should stop
-                    try {
-                        if (recordingRef.current) {
-                            const status = await recordingRef.current.getStatusAsync();
-                            if (status.canRecord) {
-                                await recordingRef.current.stopAndUnloadAsync();
-                            }
-                        }
-                    } catch (e) { }
-                    return;
-                }
-                await stopAndProcess(recording);
-            }, CHUNK_DURATION_MS);
+            // Start the next cycle timer
+            chunkTimeoutRef.current = setTimeout(() => {
+                stopAndProcess(recording);
+            }, CHUNK_DURATION_MS) as any;
 
         } catch (error) {
-            console.error('[VoiceSOS] Error starting recording:', error);
-            setIsListening(false);
-            onError?.(error);
+            console.error('[VoiceSOS] Loop error:', error);
+            isListening.current = false;
         }
-    }, []);
+    }, [onError]);
 
-    // 5. Public Stop
+    // 5. Public Controls
     const stopListening = useCallback(async () => {
+        console.log("[VoiceSOS] Stopping service...");
         shouldStopRef.current = true;
-        setIsListening(false);
+        
+        if (chunkTimeoutRef.current) {
+            clearTimeout(chunkTimeoutRef.current);
+            chunkTimeoutRef.current = null;
+        }
+
         if (recordingRef.current) {
-            try {
-                const status = await recordingRef.current.getStatusAsync();
-                if (status.canRecord) {
-                    await recordingRef.current.stopAndUnloadAsync();
-                }
-            } catch (e) {
-                // Ignore
-            }
+            await safeUnload(recordingRef.current);
             recordingRef.current = null;
         }
+
+        // Reset audio mode
+        try {
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: false,
+                playsInSilentModeIOS: false,
+            });
+        } catch (e) {}
+
+        isListening.current = false;
+        isProcessingRef.current = false;
+        setIsProcessing(false);
     }, []);
 
-    // 6. Public Start
-    const start = useCallback(() => {
+    const start = useCallback(async () => {
+        if (isListening.current) return;
+        console.log("[VoiceSOS] Starting service...");
+        
         shouldStopRef.current = false;
-        startListening();
-    }, [startListening]);
+        
+        // Set Audio Mode ONCE at start
+        try {
+            await Audio.setAudioModeAsync({
+                allowsRecordingIOS: true,
+                playsInSilentModeIOS: true,
+                staysActiveInBackground: true, // Crucial for SOS
+                interruptionModeIOS: InterruptionModeIOS.DoNotMix,
+                shouldDuckAndroid: true,
+                interruptionModeAndroid: InterruptionModeAndroid.DoNotMix,
+                playThroughEarpieceAndroid: false,
+            });
+        } catch (e) {
+            console.error("[VoiceSOS] Failed to set audio mode:", e);
+        }
+
+        startListeningLoop();
+    }, [startListeningLoop]);
 
     return {
-        isListening,
+        isListening: isListening.current,
         isProcessing,
         startListening: start,
         stopListening,
-        isModelReady: true, // Mock for compatibility
+        isModelReady: true,
     };
 }

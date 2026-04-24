@@ -46,7 +46,7 @@ export const useVideoSOS = (options?: { onRecordingFinished?: (uri: string) => v
                             console.log("[VideoSOS] Video saved to gallery.");
 
                             // Upload to Backend
-                            console.log("[VideoSOS] Uploading video to server...");
+                            console.log("[VideoSOS] Uploading video to Cloudinary...");
                             // We need to import SOSService dynamically or at the top
                             const { SOSService } = require('../../../services/sosService');
                             const uploadedUrl = await SOSService.uploadMedia(data.uri, 'video');
