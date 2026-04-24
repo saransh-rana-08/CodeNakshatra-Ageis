@@ -50,7 +50,7 @@ export const useSOSOrchestrator = ({
 
     // Pre-SOS State
     const [preSosActive, setPreSosActive] = useState(false);
-    const [countdown, setCountdown] = useState(8);
+    const [countdown, setCountdown] = useState(() => restriction.sosCountdownSecs);
     const [customAlarmUri, setCustomAlarmUri] = useState<string | null>(null);
     const [userName, setUserName] = useState<string | undefined>(undefined);
 
@@ -222,7 +222,7 @@ export const useSOSOrchestrator = ({
         // Force cleanup of Pre-SOS
         if (preSosActive || countdownTimerRef.current) {
             setPreSosActive(false);
-            setCountdown(8);
+            setCountdown(restriction.sosCountdownSecs);
             if (countdownTimerRef.current) clearInterval(countdownTimerRef.current);
             if (soundRef.current) {
                 try {
@@ -326,7 +326,7 @@ export const useSOSOrchestrator = ({
 
         console.log("⏳ Starting Automated SOS Sequence...");
         setPreSosActive(true);
-        setCountdown(8);
+        setCountdown(restriction.sosCountdownSecs);
 
         // Play Alarm
         try {
@@ -362,7 +362,7 @@ export const useSOSOrchestrator = ({
         }
 
         // Countdown
-        let timeLeft = 8;
+        let timeLeft = restriction.sosCountdownSecs;
         countdownTimerRef.current = setInterval(() => {
             timeLeft -= 1;
             setCountdown(timeLeft);
@@ -388,7 +388,7 @@ export const useSOSOrchestrator = ({
         }
 
         setPreSosActive(false);
-        setCountdown(8);
+        setCountdown(restriction.sosCountdownSecs);
         Alert.alert("Cancelled", "Emergency SOS cancelled. You are safe.");
     }, []);
 

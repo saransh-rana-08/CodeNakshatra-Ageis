@@ -8,7 +8,7 @@ const GROQ_API_KEY = process.env.EXPO_PUBLIC_GROQ_API_KEY || ""; // Load from en
 
 // Trigger Phrases (English & Hindi)
 const TRIGGER_PHRASES = [
-    "help", "help me", "save me", "stop", "no", "leave me"
+    "help", "help me", "save me", "no", "leave me"
     // "don't touch me", "dont touch me", "don't hurt me", "dont hurt me",
     // "let me go", "please stop", "somebody help", "call the police",
     // "emergency", "i need help",

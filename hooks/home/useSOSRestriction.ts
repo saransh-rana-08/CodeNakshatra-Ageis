@@ -6,8 +6,10 @@ const KEY_IS_PAUSED = 'sos_restriction_is_paused';
 const KEY_PAUSE_END_TIME = 'sos_restriction_pause_end_time';
 const KEY_LAST_TRIGGER_TIME = 'sos_restriction_last_trigger_time';
 const KEY_COOLDOWN_DURATION = 'sos_restriction_cooldown_duration';
+const KEY_COUNTDOWN_SECS = 'sos_restriction_countdown_secs';
 
 const DEFAULT_COOLDOWN_MS = 600_000; // 10 minutes
+const DEFAULT_COUNTDOWN_SECS = 8;    // pre-SOS alarm countdown
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 interface SOSAllowedResult {
@@ -34,12 +36,17 @@ export interface UseSOSRestrictionReturn {
     cooldownDuration: number;
     /** Update the cooldown duration (persisted). */
     setCooldownDuration: (ms: number) => Promise<void>;
+    /** Pre-SOS alarm countdown in seconds (how long the alarm plays before SOS fires). */
+    sosCountdownSecs: number;
+    /** Update the pre-SOS countdown duration (persisted, clamped 5–60s). */
+    setSosCountdownSecs: (secs: number) => Promise<void>;
 }
 
 export const useSOSRestriction = (): UseSOSRestrictionReturn => {
     const [pauseEndTime, setPauseEndTime] = useState<number>(0);
     const [lastTriggerTime, setLastTriggerTime] = useState<number>(0);
     const [cooldownDuration, setCooldownDurationState] = useState<number>(DEFAULT_COOLDOWN_MS);
+    const [sosCountdownSecs, setSosCountdownSecsState] = useState<number>(DEFAULT_COUNTDOWN_SECS);
 
     // Live countdown tickers (updated every second)
     const [remainingPauseMs, setRemainingPauseMs] = useState(0);
@@ -56,17 +63,20 @@ export const useSOSRestriction = (): UseSOSRestrictionReturn => {
                     rawPauseEnd,
                     rawLastTrigger,
                     rawCooldown,
+                    rawCountdown,
                 ] = await AsyncStorage.multiGet([
                     KEY_IS_PAUSED,
                     KEY_PAUSE_END_TIME,
                     KEY_LAST_TRIGGER_TIME,
                     KEY_COOLDOWN_DURATION,
+                    KEY_COUNTDOWN_SECS,
                 ]);
 
                 const storedPauseEnd = rawPauseEnd[1] ? parseInt(rawPauseEnd[1], 10) : 0;
                 const storedLastTrigger = rawLastTrigger[1] ? parseInt(rawLastTrigger[1], 10) : 0;
                 const storedCooldown = rawCooldown[1] ? parseInt(rawCooldown[1], 10) : DEFAULT_COOLDOWN_MS;
                 const storedIsPaused = rawPaused[1] === 'true';
+                const storedCountdown = rawCountdown[1] ? parseInt(rawCountdown[1], 10) : DEFAULT_COUNTDOWN_SECS;
 
                 // Restore only if still meaningful — if pause already expired, clean up
                 const now = Date.now();
@@ -79,6 +89,7 @@ export const useSOSRestriction = (): UseSOSRestrictionReturn => {
 
                 setLastTriggerTime(storedLastTrigger);
                 setCooldownDurationState(storedCooldown);
+                setSosCountdownSecsState(storedCountdown);
 
             } catch (err) {
                 // ⚠️ Fail OPEN — if we can't read, we do NOT block SOS
@@ -175,6 +186,18 @@ export const useSOSRestriction = (): UseSOSRestrictionReturn => {
         }
     }, []);
 
+    // ─── Update pre-SOS countdown duration ───────────────────────────────────
+    const setSosCountdownSecs = useCallback(async (secs: number) => {
+        // Clamp between 5 and 60 seconds
+        const clamped = Math.min(60, Math.max(5, Math.round(secs)));
+        setSosCountdownSecsState(clamped);
+        try {
+            await AsyncStorage.setItem(KEY_COUNTDOWN_SECS, clamped.toString());
+        } catch (err) {
+            console.log('⚠️ [SOSRestriction] Failed to persist countdown secs:', err);
+        }
+    }, []);
+
     // ─── Derived state ────────────────────────────────────────────────────────
     const isCurrentlyPaused = pauseEndTime > 0 && Date.now() < pauseEndTime;
 
@@ -188,5 +211,7 @@ export const useSOSRestriction = (): UseSOSRestrictionReturn => {
         isCurrentlyPaused,
         cooldownDuration,
         setCooldownDuration,
+        sosCountdownSecs,
+        setSosCountdownSecs,
     };
 };

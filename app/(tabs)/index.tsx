@@ -158,7 +158,8 @@ export default function HomeScreen() {
     <ScrollView style={styles.screen} showsVerticalScrollIndicator={false}>
       <View style={styles.header}>
         <View style={styles.headerContent}>
-          <Text style={styles.appTitle}>Ageis</Text>
+          <Text style={styles.appTitle}>Ae
+            gis</Text>
           <Text style={styles.appSubtitle}>
             Smart emergency detection with motion, voice, and live location tracking
           </Text>

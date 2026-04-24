@@ -2,7 +2,6 @@ import React, { useCallback, useState } from 'react';
 import {
     Alert,
     Modal,
-    ScrollView,
     StyleSheet,
     Text,
     TextInput,
@@ -11,11 +10,22 @@ import {
 } from 'react-native';
 import { UseSOSRestrictionReturn } from '../../hooks/home/useSOSRestriction';
 
-// ─── Preset Durations ─────────────────────────────────────────────────────────
+// ─── Preset Durations (pause) ─────────────────────────────────────────────────
 const PAUSE_PRESETS = [
     { label: '15 min', ms: 15 * 60 * 1000 },
     { label: '30 min', ms: 30 * 60 * 1000 },
     { label: '1 hour', ms: 60 * 60 * 1000 },
+] as const;
+
+// ─── Preset Countdown Durations (pre-SOS alarm) ───────────────────────────────
+const COUNTDOWN_PRESETS = [5, 8, 15, 30] as const;
+
+// ─── Preset Cooldown Durations (post-trigger lockout) ─────────────────────────
+const COOLDOWN_PRESETS = [
+    { label: '5 min',  ms: 5 * 60 * 1000 },
+    { label: '10 min', ms: 10 * 60 * 1000 },
+    { label: '30 min', ms: 30 * 60 * 1000 },
+    { label: '1 hr',   ms: 60 * 60 * 1000 },
 ] as const;
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -25,6 +35,14 @@ const formatMs = (ms: number): string => {
     const minutes = Math.floor(totalSeconds / 60);
     const seconds = totalSeconds % 60;
     return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+};
+
+/** Format a cooldown duration in ms for display as a label (e.g. "10 min", "1 hr") */
+const formatCooldownLabel = (ms: number): string => {
+    const mins = Math.round(ms / 60_000);
+    if (mins < 60) return `${mins} min`;
+    const hrs = Math.round(ms / 3_600_000);
+    return `${hrs} hr`;
 };
 
 // ─── Props ────────────────────────────────────────────────────────────────────
@@ -42,10 +60,17 @@ export function SafetyControlPanel({ restriction, isTracking }: SafetyControlPan
         isCurrentlyPaused,
         remainingPauseMs,
         cooldownRemainingMs,
+        sosCountdownSecs,
+        setSosCountdownSecs,
+        cooldownDuration,
+        setCooldownDuration,
     } = restriction;
 
     const [customMinutes, setCustomMinutes] = useState('');
     const [customModalVisible, setCustomModalVisible] = useState(false);
+    // Separate state for the cooldown-duration custom modal
+    const [cooldownCustomMinutes, setCooldownCustomMinutes] = useState('');
+    const [cooldownModalVisible, setCooldownModalVisible] = useState(false);
 
     // ─── Derived state ────────────────────────────────────────────────────────
     const sosStatus = isSOSAllowed();
@@ -178,6 +203,158 @@ export function SafetyControlPanel({ restriction, isTracking }: SafetyControlPan
                     <Text style={styles.resumeButtonText}>▶ Resume Auto-SOS Now</Text>
                 </TouchableOpacity>
             )}
+
+            {/* ── Countdown Duration Picker ── */}
+            <View style={styles.divider} />
+            <Text style={styles.sectionLabel}>Pre-SOS Alarm Duration:</Text>
+            <View style={styles.countdownPickerRow}>
+                {/* Quick chips */}
+                {COUNTDOWN_PRESETS.map((secs) => (
+                    <TouchableOpacity
+                        key={secs}
+                        style={[
+                            styles.chipButton,
+                            sosCountdownSecs === secs && styles.chipButtonActive,
+                        ]}
+                        onPress={() => setSosCountdownSecs(secs)}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={[
+                            styles.chipText,
+                            sosCountdownSecs === secs && styles.chipTextActive,
+                        ]}>
+                            {secs}s
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+            </View>
+            {/* Fine-grained stepper */}
+            <View style={styles.stepperRow}>
+                <TouchableOpacity
+                    style={styles.stepperBtn}
+                    onPress={() => setSosCountdownSecs(sosCountdownSecs - 1)}
+                    activeOpacity={0.75}
+                    disabled={sosCountdownSecs <= 5}
+                >
+                    <Text style={[styles.stepperBtnText, sosCountdownSecs <= 5 && styles.stepperBtnDisabled]}>
+                        −
+                    </Text>
+                </TouchableOpacity>
+
+                <View style={styles.stepperValueBox}>
+                    <Text style={styles.stepperValue}>{sosCountdownSecs}</Text>
+                    <Text style={styles.stepperUnit}>seconds</Text>
+                </View>
+
+                <TouchableOpacity
+                    style={styles.stepperBtn}
+                    onPress={() => setSosCountdownSecs(sosCountdownSecs + 1)}
+                    activeOpacity={0.75}
+                    disabled={sosCountdownSecs >= 60}
+                >
+                    <Text style={[styles.stepperBtnText, sosCountdownSecs >= 60 && styles.stepperBtnDisabled]}>
+                        +
+                    </Text>
+                </TouchableOpacity>
+            </View>
+            <Text style={styles.countdownHint}>
+                Alarm plays for this long before SOS fires. Min 5s, max 60s.
+            </Text>
+
+            {/* ── Post-Trigger Cooldown Duration Picker ── */}
+            <View style={styles.divider} />
+            <Text style={styles.sectionLabel}>Post-Trigger Cooldown:</Text>
+            <Text style={[styles.detailText, { marginBottom: 10 }]}>
+                After auto-SOS fires, new automated triggers are blocked for this long.
+                Currently: <Text style={{ color: '#94a3b8', fontWeight: '700' }}>{formatCooldownLabel(cooldownDuration)}</Text>
+            </Text>
+            <View style={styles.countdownPickerRow}>
+                {COOLDOWN_PRESETS.map((preset) => (
+                    <TouchableOpacity
+                        key={preset.ms}
+                        style={[
+                            styles.chipButton,
+                            cooldownDuration === preset.ms && styles.chipButtonCooldownActive,
+                        ]}
+                        onPress={() => setCooldownDuration(preset.ms)}
+                        activeOpacity={0.75}
+                    >
+                        <Text style={[
+                            styles.chipText,
+                            cooldownDuration === preset.ms && styles.chipTextCooldownActive,
+                        ]}>
+                            {preset.label}
+                        </Text>
+                    </TouchableOpacity>
+                ))}
+                <TouchableOpacity
+                    style={[
+                        styles.chipButton,
+                        styles.presetButtonCustom,
+                        !COOLDOWN_PRESETS.some(p => p.ms === cooldownDuration) && styles.chipButtonCooldownActive,
+                    ]}
+                    onPress={() => setCooldownModalVisible(true)}
+                    activeOpacity={0.75}
+                >
+                    <Text style={[
+                        styles.chipText,
+                        !COOLDOWN_PRESETS.some(p => p.ms === cooldownDuration) && styles.chipTextCooldownActive,
+                    ]}>
+                        Custom
+                    </Text>
+                </TouchableOpacity>
+            </View>
+
+            {/* ── Cooldown Custom Duration Modal ── */}
+            <Modal
+                visible={cooldownModalVisible}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setCooldownModalVisible(false)}
+            >
+                <View style={styles.modalOverlay}>
+                    <View style={styles.modalBox}>
+                        <Text style={styles.modalTitle}>Custom Cooldown Duration</Text>
+                        <Text style={styles.modalSubtitle}>Minutes to lock out auto-triggers after an SOS fires (1–1440)</Text>
+
+                        <TextInput
+                            style={styles.minuteInput}
+                            placeholderTextColor="#6b7280"
+                            placeholder="e.g. 20"
+                            keyboardType="number-pad"
+                            value={cooldownCustomMinutes}
+                            onChangeText={setCooldownCustomMinutes}
+                            maxLength={4}
+                        />
+
+                        <View style={styles.modalActions}>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.modalBtnCancel]}
+                                onPress={() => { setCooldownModalVisible(false); setCooldownCustomMinutes(''); }}
+                            >
+                                <Text style={styles.modalBtnText}>Cancel</Text>
+                            </TouchableOpacity>
+                            <TouchableOpacity
+                                style={[styles.modalBtn, styles.modalBtnConfirm]}
+                                onPress={async () => {
+                                    const mins = parseInt(cooldownCustomMinutes, 10);
+                                    if (isNaN(mins) || mins <= 0 || mins > 1440) {
+                                        Alert.alert('Invalid Duration', 'Please enter a number between 1 and 1440 minutes.');
+                                        return;
+                                    }
+                                    await setCooldownDuration(mins * 60 * 1000);
+                                    setCooldownCustomMinutes('');
+                                    setCooldownModalVisible(false);
+                                }}
+                            >
+                                <Text style={[styles.modalBtnText, { color: '#fff', fontWeight: '700' }]}>
+                                    Confirm
+                                </Text>
+                            </TouchableOpacity>
+                        </View>
+                    </View>
+                </View>
+            </Modal>
 
             {/* ── Custom Duration Modal ── */}
             <Modal
@@ -352,6 +529,98 @@ const styles = StyleSheet.create({
         fontSize: 15,
         fontWeight: '700',
         letterSpacing: 0.3,
+    },
+
+    // Countdown picker
+    divider: {
+        height: 1,
+        backgroundColor: '#334155',
+        marginVertical: 16,
+    },
+    countdownPickerRow: {
+        flexDirection: 'row',
+        gap: 8,
+        marginBottom: 12,
+    },
+    chipButton: {
+        flex: 1,
+        paddingVertical: 9,
+        borderRadius: 10,
+        alignItems: 'center',
+        backgroundColor: '#334155',
+        borderWidth: 1,
+        borderColor: '#475569',
+    },
+    chipButtonActive: {
+        backgroundColor: 'rgba(239,68,68,0.15)',
+        borderColor: '#ef4444',
+    },
+    chipText: {
+        color: '#94a3b8',
+        fontSize: 14,
+        fontWeight: '700',
+    },
+    chipTextActive: {
+        color: '#ef4444',
+    },
+    // Cooldown chip active — use blue to distinguish from alarm (red)
+    chipButtonCooldownActive: {
+        backgroundColor: 'rgba(59,130,246,0.15)',
+        borderColor: '#3b82f6',
+    },
+    chipTextCooldownActive: {
+        color: '#3b82f6',
+    },
+    stepperRow: {
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        backgroundColor: '#0f172a',
+        borderRadius: 14,
+        borderWidth: 1,
+        borderColor: '#334155',
+        paddingVertical: 6,
+        paddingHorizontal: 4,
+        marginBottom: 10,
+    },
+    stepperBtn: {
+        width: 48,
+        height: 48,
+        alignItems: 'center',
+        justifyContent: 'center',
+        borderRadius: 10,
+        backgroundColor: '#1e293b',
+    },
+    stepperBtnText: {
+        color: '#f8fafc',
+        fontSize: 24,
+        fontWeight: '700',
+        lineHeight: 28,
+    },
+    stepperBtnDisabled: {
+        color: '#334155',
+    },
+    stepperValueBox: {
+        flex: 1,
+        alignItems: 'center',
+    },
+    stepperValue: {
+        color: '#ef4444',
+        fontSize: 36,
+        fontWeight: '900',
+        lineHeight: 40,
+    },
+    stepperUnit: {
+        color: '#64748b',
+        fontSize: 11,
+        fontWeight: '600',
+        marginTop: -2,
+    },
+    countdownHint: {
+        color: '#475569',
+        fontSize: 11,
+        textAlign: 'center',
+        lineHeight: 16,
     },
 
     // Custom duration modal

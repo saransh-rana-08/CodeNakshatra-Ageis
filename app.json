@@ -1,13 +1,12 @@
 {
   "expo": {
-    "name": "womensafety-app",
-    "slug": "womensafety-app",
+    "name": "Aegis",
+    "slug": "aegis",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "womensafetyapp",
+    "scheme": "aegis",
     "userInterfaceStyle": "automatic",
-    "newArchEnabled": true,
     "ios": {
       "supportsTablet": true
     },
@@ -18,7 +17,6 @@
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
-      "edgeToEdgeEnabled": true,
       "predictiveBackGestureEnabled": false,
       "permissions": [
         "android.permission.CAMERA",
@@ -30,8 +28,11 @@
         "android.permission.SEND_SMS",
         "android.permission.READ_MEDIA_AUDIO",
         "android.permission.READ_MEDIA_VIDEO",
-        "android.permission.READ_MEDIA_IMAGES"
-      ]
+        "android.permission.READ_MEDIA_IMAGES",
+        "android.permission.READ_MEDIA_VISUAL_USER_SELECTED",
+        "android.permission.ACCESS_MEDIA_LOCATION"
+      ],
+      "package": "com.theroyal_30.womensafetyapp"
     },
     "web": {
       "output": "static",
@@ -63,7 +64,12 @@
         "expo-build-properties",
         {
           "android": {
-            "usesCleartextTraffic": true
+            "usesCleartextTraffic": true,
+            "newArchEnabled": true,
+            "edgeToEdgeEnabled": true
+          },
+          "ios": {
+            "newArchEnabled": true
           }
         }
       ]
@@ -71,6 +77,12 @@
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "ce853980-5de8-444c-9d46-6d257cc6b6d5"
+      }
     }
   }
 }
