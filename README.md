@@ -65,3 +65,4 @@ Ageis is a life-critical emergency and women safety mobile application built wit
 - **Unsigned Uploads**: Cloudinary API keys and secrets are *never* bundled in the client code. Media is uploaded securely using Unsigned Presets.
 - **Local Caching**: The user's Auth token is stored in AsyncStorage and verified on mount to cache the user's name for instant availability during an emergency.
 - **Permissions Required**: The app requests Camera, Microphone, Foreground & Background Location, and SMS permissions to function properly.
+<!-- EAS WORK START -->
