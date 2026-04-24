@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android", "web"],
+  "apple": {
+    "modules": ["ExpoSilentSmsModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.silentsms.ExpoSilentSmsModule"]
+  }
+}

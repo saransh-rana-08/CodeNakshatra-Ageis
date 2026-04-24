@@ -1,6 +1,7 @@
 import axios from 'axios';
-import * as SMS from 'expo-sms';
+import { Platform } from 'react-native';
 import { Config } from '../constants/Config';
+import ExpoSilentSms from '../modules/expo-silent-sms';
 
 const TWILIO_SMS_URL = Config.endpoints.TWILIO_SMS;
 
@@ -47,28 +48,27 @@ export const SMSService = {
     },
 
     async sendNativeSMS(recipients: string[], message: string): Promise<boolean> {
-        console.log("📩 Checking SMS availability...");
-        const isAvailable = await SMS.isAvailableAsync();
-
-        if (!isAvailable) {
-            console.log("⚠️ SMS composer unavailable, relying on Twilio API.");
+        if (Platform.OS !== 'android') {
+            console.log("⚠️ Native Silent SMS is only supported on Android. Relying on Twilio.");
             return false;
         }
 
+        console.log("📩 Checking Native Silent SMS availability...");
         try {
-            // Android often hangs the promise when opening the Native SMS bottom sheet
-            // We use Promise.race to force-resolve after 5 seconds so the JS thread isn't blocked forever.
-            const timeoutPromise = new Promise<{ result: string }>((resolve) =>
-                setTimeout(() => resolve({ result: 'timeout_assumed_sent' }), 5000)
+            const hasPerm = await ExpoSilentSms.requestPermissionsAsync();
+            if (!hasPerm) {
+                console.log("⚠️ SEND_SMS permission denied. Relying on Twilio API.");
+                return false;
+            }
+
+            console.log("📩 Sending Silent SMS to:", recipients);
+            const results = await Promise.all(
+                recipients.map(phone => ExpoSilentSms.sendSMSAsync(phone, message))
             );
 
-            const result = await Promise.race([
-                SMS.sendSMSAsync(recipients, message),
-                timeoutPromise
-            ]);
-
-            console.log("📩 Native SMS result:", result);
-            return true;
+            const allSent = results.every(res => res);
+            console.log(`📩 Native Silent SMS result: ${allSent ? 'SUCCESS' : 'PARTIAL/FAILED'}`);
+            return allSent;
         } catch (e: any) {
             console.log("📩 Native SMS error:", e?.message || e);
             return false;
