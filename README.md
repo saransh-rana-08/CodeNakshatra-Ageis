@@ -12,25 +12,21 @@
 - **Keyword Detection**: Automatically triggers a full SOS sequence upon detecting phrases like "Help," "Save me," or custom user-defined triggers.
 
 ### Multi-Modal SOS Orchestration
-- **Evidence Gathering**: Simultaneously captures **15s of High-Quality Video** and **Audio** evidence during an emergency.
+- **Evidence Gathering**: Simultaneously captures **30s of Synchronized Video** and **Audio** evidence during an emergency.
+- **Hardware Stabilization**: Utilizes a hidden off-screen preview surface and automated mic-arbitration to ensure reliable recording on Android devices without hardware conflicts.
 - **Direct Cloudinary Integration**: Evidence is uploaded instantly to Cloudinary via optimized FormData, bypassing backend bottlenecks for maximum speed.
 - **Real-Time Location Tracking**: Captures precise GPS coordinates and generates live Google Maps tracking links for emergency contacts.
 
 ### Native Silent SMS (Android)
 - **Zero-Interaction Dispatch**: A custom native Kotlin module (`expo-silent-sms`) sends SMS alerts directly through the Android Telephony Subsystem — **no user tap required**.
+- **Hardware-First Architecture**: Bypasses cloud APIs (like Twilio) and URL shorteners to ensure the first alert is dispatched within milliseconds of the trigger.
+- **Improved OEM Compatibility**: Optimized for high reliability on Xiaomi, Redmi, and other restricted Android versions by bypassing complex subscription-level OS calls.
 - **Multipart Message Support**: Automatically fragments messages >160 characters (e.g., SOS payloads with multiple URLs) using `SmsManager.divideMessage()`.
-- **Dual-SIM Support**: Detects all active SIM subscriptions and allows specifying a preferred SIM via `subscriptionId`.
-- **Retry Logic**: Configurable `retryCount` option for mission-critical delivery resilience.
-- **OEM AutoStart Detection**: Identifies devices (Xiaomi, Oppo, OnePlus, etc.) that require manual AutoStart permission and surfaces a warning to the user.
 
 ### Safety Restriction & Cooldown System
 - **Intelligent Gating**: Prevents accidental triggers through a robust "Pause & Cooldown" system via `useSOSRestriction`.
 - **Safety Timer**: Provides a warning sequence with a loud siren (customizable) to deter threats before deep tracking initiates.
-
-### Twilio Cloud SMS Fallback
-- **Fault-Tolerant Chain**: If Native Silent SMS fails or is denied, the system automatically falls back to **Twilio Cloud API** for guaranteed delivery.
-- **Phone Number Normalization**: Auto-formats Indian numbers to E.164 (`+91XXXXXXXXXX`) before dispatch.
-- **Personalized Alerts**: Injects the user's real name and live evidence links directly into the SOS message.
+- **Instant Dispatch**: Unlike cloud-based systems, Aegis dispatches the first location alert *immediately* while media recording starts in the background.
 
 ---
 
@@ -43,7 +39,6 @@
 | AI Engine | Groq Whisper-large-v3 |
 | Media Pipeline | Cloudinary (Direct Device-to-Cloud) |
 | Native SMS | Custom `expo-silent-sms` Kotlin module (Android `SmsManager`) |
-| Cloud SMS Fallback | Twilio (via backend) |
 | Orchestration | Custom hook-driven state machine (`useSOSOrchestrator`) |
 | Animations | Moti, Reanimated |
 | Storage | AsyncStorage (Persistent safety tokens & profile cache) |
